@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Random Fan Animation (Canvas)</title>
+  <style>
+    :root{ --bg:#0f172a; --card:#0b1220; --accent:#38bdf8 }
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial}
+    body{display:grid;place-items:center;background:linear-gradient(180deg,var(--bg),#071020);color:#e6eef8}
+    .frame{width:min(920px,94vw);background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:14px;padding:18px;box-shadow:0 8px 30px rgba(2,6,23,0.6)}
+    header{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:12px}
+    h1{font-size:18px;margin:0}
+    .controls{display:flex;gap:8px;align-items:center}
+    button{background:transparent;border:1px solid rgba(255,255,255,0.06);color:inherit;padding:8px 12px;border-radius:8px;cursor:pointer}
+    small{opacity:0.7}
+    canvas{display:block;border-radius:10px;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);width:100%;height:520px}
+    .note{margin-top:10px;font-size:13px;opacity:0.85}
+    .kbd{background:#081224;padding:6px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.03)}
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <header>
+      <div>
+        <h1>Random Fan Animation — HTML Canvas</h1>
+        <small>Click canvas to randomize fan. Space to pause/play. Resize safe.</small>
+      </div>
+      <div class="controls">
+        <button id="randomize">Randomize</button>
+        <button id="toggle">Pause</button>
+      </div>
+    </header>
+
+    <canvas id="c"></canvas>
+    <div class="note">Tip: press <span class="kbd">Space</span> to pause/play. Click the canvas or "Randomize" to create a new fan (blade count, colors, speed).</div>
+  </div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  let W, H, cx, cy;
+
+  function resize(){
+    const rect = canvas.getBoundingClientRect();
+    W = canvas.width = Math.max(600, Math.floor(rect.width * devicePixelRatio));
+    H = canvas.height = Math.max(360, Math.floor(rect.height * devicePixelRatio));
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.scale(devicePixelRatio, devicePixelRatio);
+    cx = rect.width/2; cy = rect.height/2 + 20;
+  }
+
+  window.addEventListener('resize', resize);
+
+  // Fan state
+  const state = {
+    bladeCount: 3,
+    radius: 140,
+    blades: [],
+    angle: 0,
+    angularVelocity: 0.04,
+    spinning: true,
+    baseColor: '#263344'
+  };
+
+  function rand(min, max){ return Math.random()*(max-min)+min }
+  function pick(arr){ return arr[Math.floor(Math.random()*arr.length)] }
+
+  function randomizeFan(){
+    state.bladeCount = Math.floor(rand(3,7));
+    state.radius = Math.floor(rand(90,170));
+    state.angle = rand(0, Math.PI*2);
+    state.angularVelocity = rand(0.01, 0.12) * (Math.random() < 0.5 ? -1 : 1);
+    state.spinning = true;
+    const palette = [
+      ['#e11d48','#fb923c','#f97316'],
+      ['#60a5fa','#7dd3fc','#0ea5e9'],
+      ['#86efac','#34d399','#10b981'],
+      ['#fbcfe8','#f472b6','#fb7185'],
+      ['#fef3c7','#fde68a','#f59e0b']
+    ];
+    const colors = pick(palette);
+    state.blades = [];
+    for(let i=0;i<state.bladeCount;i++){
+      state.blades.push({
+        color: colors[i % colors.length],
+        offset: rand(0, 0.2)
+      });
+    }
+    state.baseColor = pick(['#0b1220','#22303a','#1b2733']);
+  }
+
+  function drawFan(){
+    const rr = state.radius;
+    // clear
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    // draw stem
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // base shadow
+    ctx.beginPath();
+    ctx.ellipse(0, rr+50, rr*0.9, 22, 0, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fill();
+
+    // pole
+    ctx.fillStyle = '#b8c6d3';
+    ctx.fillRect(-6, 40, 12, rr+10);
+
+    // motor housing
+    ctx.save();
+    ctx.translate(0, 40);
+    ctx.rotate(state.angle*0.2);
+    ctx.beginPath();
+    ctx.arc(0, 0, 34, 0, Math.PI*2);
+    ctx.fillStyle = state.baseColor;
+    ctx.fill();
+    ctx.restore();
+
+    // blades
+    ctx.save();
+    ctx.translate(0, 40);
+    ctx.rotate(state.angle);
+    for(let i=0;i<state.bladeCount;i++){
+      const a = (i/state.bladeCount) * Math.PI*2;
+      const b = state.blades[i].offset;
+      ctx.save();
+      ctx.rotate(a);
+      // blade shape
+      ctx.beginPath();
+      ctx.moveTo(10, -12);
+      ctx.quadraticCurveTo(rr*0.6, -rr*0.12 - b*50, rr, -18 - b*20);
+      ctx.quadraticCurveTo(rr*0.85, -6 - b*10, 10, -12);
+      ctx.closePath();
+      ctx.fillStyle = state.blades[i].color;
+      ctx.globalAlpha = 0.98 - Math.abs(Math.sin(state.angle*1.7 + i))*0.25;
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+
+    // center cap
+    ctx.beginPath();
+    ctx.arc(0, 40, 18, 0, Math.PI*2);
+    ctx.fillStyle = '#0b1220';
+    ctx.fill();
+
+    // subtle highlight
+    ctx.beginPath();
+    ctx.arc(-6, 34, 6, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  let last = performance.now();
+  function loop(t){
+    const dt = (t - last) / 16.6667; // ~60fps units
+    last = t;
+    if(state.spinning) state.angle += state.angularVelocity * dt;
+    // tiny friction
+    state.angularVelocity *= 0.9998;
+    drawFan();
+    requestAnimationFrame(loop);
+  }
+
+  // Interaction
+  canvas.addEventListener('click', ()=>{ randomizeFan(); });
+  document.getElementById('randomize').addEventListener('click', ()=> randomizeFan());
+  const toggleBtn = document.getElementById('toggle');
+  toggleBtn.addEventListener('click', ()=>{ state.spinning = !state.spinning; toggleBtn.textContent = state.spinning ? 'Pause' : 'Play'; });
+  window.addEventListener('keydown', (e)=>{ if(e.code === 'Space'){ e.preventDefault(); state.spinning = !state.spinning; toggleBtn.textContent = state.spinning ? 'Pause' : 'Play'; }});
+
+  // start
+  resize();
+  randomizeFan();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
